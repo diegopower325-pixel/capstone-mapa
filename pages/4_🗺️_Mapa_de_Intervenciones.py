@@ -1,8 +1,3 @@
-Para lograr que el texto de la leyenda cambie automáticamente entre negro y blanco según el modo (claro u oscuro) que el usuario tenga seleccionado en Streamlit, debemos quitar el color fijo (color: #333;) y reemplazarlo por variables de CSS nativas de la plataforma. Streamlit maneja automáticamente estas variables (--text-color) en su interfaz.
-
-Aquí tienes el código completo y actualizado. Modifiqué la sección final de la leyenda para que se adapte perfectamente a cualquier configuración de pantalla:
-
-Python
 import streamlit as st
 import pandas as pd
 import folium
@@ -90,47 +85,29 @@ try:
         except:
             continue
 
-    # Renderizar el mapa interactivo usando el contenedor original st_folium
+    # Renderizar el mapa interactivo de ArcGIS
     st_folium(mapa, width="100%", height=650)
 
     # =========================================================================
-    # SIMBOLOGÍA CONFIGURADA PARA MODO CLARO / OSCURO DINÁMICO
+    # LEYENDA ULTRA-COMPATIBLE (Soporta Modo Claro y Oscuro automáticamente)
     # =========================================================================
     st.markdown("### 📊 Leyenda de Sectores Detectados")
     cols = st.columns(3)
     
+    # Diccionario de traducción de nombres de Folium a colores nativos de Markdown de Streamlit
+    mapa_colores_st = {
+        "red": "red", "blue": "blue", "green": "green", 
+        "purple": "violet", "orange": "orange", "darkred": "red", 
+        "cadetblue": "blue", "darkpurple": "violet", "pink": "rainbow", 
+        "darkblue": "blue", "darkgreen": "green", "gray": "gray"
+    }
+    
     for i, (cat, col) in enumerate(diccionario_colores.items()):
-        # Conversión exacta a códigos HEX
-        mapa_colores_hex = {
-            "red": "#E74C3C", "blue": "#3498DB", "green": "#2ECC71", 
-            "purple": "#9B59B6", "orange": "#E67E22", "darkred": "#943126", 
-            "cadetblue": "#5D6D7E", "darkpurple": "#4A235A", "pink": "#F48FB1", 
-            "darkblue": "#1B4F72", "darkgreen": "#1E8449", "gray": "#7F8C8D"
-        }
-        color_hex = mapa_colores_hex.get(col, "#7F8C8D")
-        
+        color_markdown = mapa_colores_st.get(col, "gray")
         with cols[i % 3]:
-            st.markdown(
-                f"""
-                <div style="display: flex; align-items: center; margin-bottom: 8px;">
-                    <span style="
-                        display: inline-block; 
-                        width: 14px; 
-                        height: 14px; 
-                        background-color: {color_hex}; 
-                        border-radius: 50%; 
-                        margin-right: 10px;
-                        border: 1px solid #555;
-                    "></span>
-                    <span style="
-                        font-weight: bold; 
-                        font-size: 14px; 
-                        color: var(--text-color);
-                    ">{cat}</span>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
+            # Usamos la sintaxis oficial de Streamlit para colorear texto: :color[texto]
+            # Esto garantiza compatibilidad absoluta con temas claros y oscuros sin romper la sintaxis
+            st.markdown(f"**:{color_markdown}[●] {cat}**")
 
 except FileNotFoundError:
     st.error(f"No se pudo encontrar el archivo '{ARCHIVO_DATOS}' en tu repositorio.")
