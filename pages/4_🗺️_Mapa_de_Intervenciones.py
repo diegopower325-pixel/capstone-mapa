@@ -7,120 +7,94 @@ from streamlit_folium import st_folium
 st.set_page_config(page_title="Mapa de Intervenciones", layout="wide")
 st.title("📍 Distribución Geográfica de Intervenciones (Camión Vactor)")
 
-# Archivo base por defecto
-ARCHIVO_PREDETERMINADO = "datos_vactor.csv"
+# Nombre exacto de tu archivo en la raíz del repositorio
+ARCHIVO_DATOS = "datos_vactor.csv"
 
-# =========================================================================
-# 1. CONTROLADOR DE CARGA DE DATOS (Barra Lateral)
-# =========================================================================
-st.sidebar.header("📁 Gestión de Datos")
-archivo_cargado = st.sidebar.file_uploader(
-    "Cargar un set de datos alternativo (Opcional)", 
-    type=["csv"],
-    help="El archivo debe mantener las columnas 'Coordenada X', 'Coordenada Y' y los sectores."
-)
+try:
+    # 1. Cargar datos desde el CSV
+    df = pd.read_csv(ARCHIVO_DATOS)
+    
+    # 2. Limpieza crítica: Eliminar filas vacías
+    df = df.dropna(subset=['Coordenada X', 'Coordenada Y'])
+    
+    # 3. Conversión de comas a puntos para procesar decimales
+    df['Coordenada X'] = df['Coordenada X'].astype(str).str.replace(',', '.').astype(float)
+    df['Coordenada Y'] = df['Coordenada Y'].astype(str).str.replace(',', '.').astype(float)
+    
+    if df.empty:
+        st.error("El archivo CSV no contiene registros con coordenadas válidas.")
+        st.stop()
 
-# Inicializar el DataFrame vacío
-df = pd.DataFrame()
+    # Selector interactivo
+    criterio = st.selectbox(
+        "Selecciona el criterio para clasificar los puntos en el mapa:",
+        ["Unidad Vecinal", "Macrosector", "Microsector"]
+    )
 
-# Cargar el archivo correspondiente
-if archivo_cargado is not None:
-    try:
-        df = pd.read_csv(archivo_cargado)
-        st.sidebar.success("¡Set de datos externo cargado con éxito!")
-    except Exception as e:
-        st.sidebar.error(f"Error al leer el archivo cargado: {e}")
-else:
-    try:
-        df = pd.read_csv(ARCHIVO_PREDETERMINADO)
-    except FileNotFoundError:
-        st.error(f"No se encontró el archivo base '{ARCHIVO_PREDETERMINADO}' en el repositorio. Por favor, sube un archivo en la barra lateral.")
+    # Paleta de colores originales de Folium
+    colores_disponibles = [
+        "red", "blue", "green", "purple", "orange", "darkred", "cadetblue", 
+        "darkpurple", "pink", "darkblue", "darkgreen"
+    ]
 
-# =========================================================================
-# 2. CREACIÓN FIJA DEL MAPA BASE (ArcGIS)
-# =========================================================================
-mapa = folium.Map(
-    location=[-38.745, -72.615], 
-    zoom_start=12, 
-    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-    attr="Esri / ArcGIS Online"
-)
+    categorias_unicas = df[criterio].dropna().unique()
+    diccionario_colores = {}
+    for i, cat in enumerate(categorias_unicas):
+        diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
 
-# =========================================================================
-# 3. PROCESAMIENTO DE PUNTOS (Si hay datos disponibles)
-# =========================================================================
-diccionario_colores = {}
+    # =========================================================================
+    # MAPA BASE ORIGINAL DE ARCGIS
+    # =========================================================================
+    mapa = folium.Map(
+        location=[-38.745, -72.615], 
+        zoom_start=12, 
+        tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+        attr="Esri / ArcGIS Online"
+    )
 
-if df is not None and not df.empty:
-    try:
-        # Limpieza crítica de coordenadas
-        df = df.dropna(subset=['Coordenada X', 'Coordenada Y'])
-        df['Coordenada X'] = df['Coordenada X'].astype(str).str.replace(',', '.').astype(float)
-        df['Coordenada Y'] = df['Coordenada Y'].astype(str).str.replace(',', '.').astype(float)
-        
-        # Selector interactivo de criterio
-        criterio = st.selectbox(
-            "Selecciona el criterio para clasificar los puntos en el mapa:",
-            ["Unidad Vecinal", "Macrosector", "Microsector"]
-        )
+    # =========================================================================
+    # RENDERIZADO DE PUNTOS
+    # =========================================================================
+    df_render = df.head(1200)
 
-        # Configuración de la paleta de colores
-        colores_disponibles = [
-            "red", "blue", "green", "purple", "orange", "darkred", "cadetblue", 
-            "darkpurple", "pink", "darkblue", "darkgreen"
-        ]
-
-        categorias_unicas = df[criterio].dropna().unique()
-        for i, cat in enumerate(categorias_unicas):
-            diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
-
-        st.caption(f"Visualizando un extracto optimizado de las {len(df)} intervenciones detectadas.")
-
-        # Dibujar los puntos sobre el objeto 'mapa'
-        df_render = df.head(2500)
-        for index, fila in df_render.iterrows():
-            try:
-                lat = float(fila['Coordenada Y'])
-                lon = float(fila['Coordenada X'])
+    for index, fila in df_render.iterrows():
+        try:
+            lat = float(fila['Coordenada Y'])
+            lon = float(fila['Coordenada X'])
+            
+            categoria_actual = fila[criterio]
+            color_punto = diccionario_colores.get(categoria_actual, "gray")
                 
-                categoria_actual = fila[criterio]
-                color_punto = diccionario_colores.get(categoria_actual, "gray")
-                    
-                info_popup = f"""
-                <b>Dirección:</b> {fila.get('Dirección de la Orden de Trabajo de Workforce', 'No registrada')}<br>
-                <b>Unidad Vecinal:</b> {fila.get('Unidad Vecinal', 'N/A')}<br>
-                <b>Macrosector:</b> {fila.get('Macrosector', 'N/A')}<br>
-                <b>Microsector:</b> {fila.get('Microsector', 'N/A')}<br>
-                <b>Coordenadas:</b> {lat}, {lon}
-                """
-                
-                folium.CircleMarker(
-                    location=[lat, lon],
-                    radius=5,
-                    popup=folium.Popup(info_popup, max_width=250),
-                    color=color_punto,
-                    fill=True,
-                    fill_color=color_punto,
-                    fill_opacity=0.7
-                ).add_to(mapa)
-            except:
-                continue
-    except Exception as e:
-        st.error(f"Error al procesar los puntos del mapa: {e}")
+            info_popup = f"""
+            <b>Dirección:</b> {fila.get('Dirección de la Orden de Trabajo de Workforce', 'No registrada')}<br>
+            <b>Unidad Vecinal:</b> {fila.get('Unidad Vecinal', 'N/A')}<br>
+            <b>Macrosector:</b> {fila.get('Macrosector', 'N/A')}<br>
+            <b>Microsector:</b> {fila.get('Microsector', 'N/A')}<br>
+            <b>Coordenadas:</b> {lat}, {lon}
+            """
+            
+            folium.CircleMarker(
+                location=[lat, lon],
+                radius=5,
+                popup=folium.Popup(info_popup, max_width=250),
+                color=color_punto,
+                fill=True,
+                fill_color=color_punto,
+                fill_opacity=0.7
+            ).add_to(mapa)
+        except:
+            continue
 
-# =========================================================================
-# 4. RENDERIZADO FINAL DEL MAPA EN LA PÁGINA
-# =========================================================================
-# Al dejar esta función afuera de cualquier "if", el mapa se dibuja sí o sí
-st_folium(mapa, width="100%", height=650)
+    # Renderizar el mapa interactivo de ArcGIS
+    st_folium(mapa, width="100%", height=650)
 
-# =========================================================================
-# 5. LEYENDA DINÁMICA
-# =========================================================================
-if diccionario_colores:
+    # =========================================================================
+    # LEYENDA ULTRA-COMPATIBLE (Soporta Modo Claro y Oscuro automáticamente)
+    # =========================================================================
     st.markdown("### 📊 Leyenda de Sectores Detectados")
     cols = st.columns(3)
     
+    # Diccionario de traducción de nombres de Folium a colores nativos de Markdown de Streamlit
     mapa_colores_st = {
         "red": "red", "blue": "blue", "green": "green", 
         "purple": "violet", "orange": "orange", "darkred": "red", 
@@ -131,4 +105,11 @@ if diccionario_colores:
     for i, (cat, col) in enumerate(diccionario_colores.items()):
         color_markdown = mapa_colores_st.get(col, "gray")
         with cols[i % 3]:
+            # Usamos la sintaxis oficial de Streamlit para colorear texto: :color[texto]
+            # Esto garantiza compatibilidad absoluta con temas claros y oscuros sin romper la sintaxis
             st.markdown(f"**:{color_markdown}[●] {cat}**")
+
+except FileNotFoundError:
+    st.error(f"No se pudo encontrar el archivo '{ARCHIVO_DATOS}' en tu repositorio.")
+except Exception as e:
+    st.error(f"Ocurrió un error al procesar el mapa: {e}")
