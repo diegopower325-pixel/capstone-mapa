@@ -9,7 +9,7 @@ st.title("📍 Distribución Geográfica de Intervenciones de Limpieza")
 st.write("Visualización interactiva de los sectores intervenidos en Temuco.")
 
 # Nombre del archivo real que se ve en tu captura de pantalla
-ARCHIVO_DATOS = "intervenciones_registradas.csv"
+ARCHIVO_DATOS = "datos_vactor.csv"
 
 try:
     df = pd.read_csv(ARCHIVO_DATOS)
