@@ -1,3 +1,8 @@
+Para lograr que el texto de la leyenda cambie automáticamente entre negro y blanco según el modo (claro u oscuro) que el usuario tenga seleccionado en Streamlit, debemos quitar el color fijo (color: #333;) y reemplazarlo por variables de CSS nativas de la plataforma. Streamlit maneja automáticamente estas variables (--text-color) en su interfaz.
+
+Aquí tienes el código completo y actualizado. Modifiqué la sección final de la leyenda para que se adapte perfectamente a cualquier configuración de pantalla:
+
+Python
 import streamlit as st
 import pandas as pd
 import folium
@@ -43,7 +48,7 @@ try:
         diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
 
     # =========================================================================
-    # MAPA BASE ORIGINAL DE ARCGIS (Restablecido)
+    # MAPA BASE ORIGINAL DE ARCGIS
     # =========================================================================
     mapa = folium.Map(
         location=[-38.745, -72.615], 
@@ -89,13 +94,13 @@ try:
     st_folium(mapa, width="100%", height=650)
 
     # =========================================================================
-    # SIMBOLOGÍA CORREGIDA (Círculos con el color real del mapa)
+    # SIMBOLOGÍA CONFIGURADA PARA MODO CLARO / OSCURO DINÁMICO
     # =========================================================================
     st.markdown("### 📊 Leyenda de Sectores Detectados")
     cols = st.columns(3)
     
     for i, (cat, col) in enumerate(diccionario_colores.items()):
-        # Conversión exacta a códigos HEX para que la web interprete el color correcto
+        # Conversión exacta a códigos HEX
         mapa_colores_hex = {
             "red": "#E74C3C", "blue": "#3498DB", "green": "#2ECC71", 
             "purple": "#9B59B6", "orange": "#E67E22", "darkred": "#943126", 
@@ -117,7 +122,11 @@ try:
                         margin-right: 10px;
                         border: 1px solid #555;
                     "></span>
-                    <span style="font-weight: bold; color: #333; font-size: 14px;">{cat}</span>
+                    <span style="
+                        font-weight: bold; 
+                        font-size: 14px; 
+                        color: var(--text-color);
+                    ">{cat}</span>
                 </div>
                 """, 
                 unsafe_allow_html=True
