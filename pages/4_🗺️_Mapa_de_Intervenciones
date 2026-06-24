@@ -3,95 +3,92 @@ import pandas as pd
 import folium
 from streamlit_folium import st_folium
 
-# Configuración de la página
+# 1. Configuración de la página en modo ancho para que el mapa se vea gigante
 st.set_page_config(page_title="Mapa de Intervenciones", layout="wide")
-st.title("📍 Distribución Geográfica de Intervenciones de Limpieza")
-st.write("Visualización interactiva de los sectores intervenidos en Temuco.")
+st.title("📍 Distribución Geográfica de Intervenciones (Camión Vactor)")
+st.write("Visualización interactiva con mapas base de ArcGIS Online para la comuna de Temuco.")
 
-# Nombre del archivo real que se ve en tu captura de pantalla
+# Nombre exacto de tu archivo del repositorio
 ARCHIVO_DATOS = "datos_vactor.csv"
 
 try:
+    # 2. Cargar datos asegurando que no se alteren los decimales
     df = pd.read_csv(ARCHIVO_DATOS)
     
-    # Comprobar que las columnas de coordenadas existan exactamente como en tu Excel
-    if 'Coordenada X' not in df.columns or 'Coordenada Y' not in df.columns:
-        st.error("Error: No se encontraron las columnas 'Coordenada X' o 'Coordenada Y' en el archivo CSV.")
+    # 3. Limpieza crítica: Filtrar y eliminar filas donde las coordenadas vengan vacías
+    df = df.dropna(subset=['Coordenada X', 'Coordenada Y'])
+    
+    if df.empty:
+        st.error("El archivo CSV no contiene registros con coordenadas válidas.")
         st.stop()
 
-    # Selector interactivo para el menú de Streamlit
+    # 4. Selector interactivo con los nombres exactos de tus columnas de clasificación
     criterio = st.selectbox(
         "Selecciona el criterio para clasificar los puntos en el mapa:",
-        ["Unidades Vecinales", "Microsector", "Macrosector"]
+        ["Unidad Vecinal", "Macrosector", "Microsector"]
     )
 
-    # Mapeamos la selección. Si tus columnas en el CSV se llaman diferente, cámbialas a la derecha.
-    columna_mapa = {
-        "Unidades Vecinales": "unidad_vecinal", 
-        "Microsector": "microsector",
-        "Macrosector": "macrosector"
-    }[criterio]
-    
-    # Si las columnas de sectores aún no están creadas en tu CSV, creamos una temporal para que no falle
-    if columna_mapa not in df.columns:
-        st.warning(f"Nota: La columna '{columna_mapa}' no está en el CSV actual. Mostrando puntos con un color base.")
-        df[columna_mapa] = "Intervención Registrada"
-
-    # Paleta de colores para los círculos
+    # 5. Paleta de colores para pintar los puntos de forma dinámica estilo QGIS
     colores_disponibles = [
         "red", "blue", "green", "purple", "orange", "darkred", "cadetblue", 
         "darkpurple", "pink", "darkblue", "darkgreen"
     ]
 
-    categorias_unicas = df[columna_mapa].dropna().unique()
+    # Obtener las categorías únicas de la columna seleccionada (ej: ESTADIO, ACCESO NORTE, etc.)
+    categorias_unicas = df[criterio].dropna().unique()
     diccionario_colores = {}
     for i, cat in enumerate(categorias_unicas):
         diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
 
-    # Crear el mapa base centrado en Temuco (Servidor público de ArcGIS)
+    # 6. Crear el mapa base centrado en Temuco consumiendo el Servidor Oficial de ArcGIS
     mapa = folium.Map(
-        location=[-38.748, -72.612], 
+        location=[-38.745, -72.615], 
         zoom_start=12, 
         tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
         attr="Esri / ArcGIS Online"
     )
 
-    # Dibujar los marcadores circulares con precisión decimal completa
+    # 7. Dibujar los marcadores en el mapa uno a uno
     for index, fila in df.iterrows():
-        lat = fila['Coordenada Y']
-        lon = fila['Coordenada X']
+        lat = float(fila['Coordenada Y'])
+        lon = float(fila['Coordenada X'])
         
-        if pd.isna(lat) or pd.isna(lon):
-            continue
+        categoria_actual = fila[criterio]
+        
+        # Asignar color según la categoría (gris si está vacío)
+        color_punto = diccionario_colores.get(categoria_actual, "gray")
             
-        categoria_actual = fila[columna_mapa]
-        color_punto = diccionario_colores.get(categoria_actual, "blue")
-            
+        # Crear etiqueta flotante para cuando pinchen el círculo
         info_popup = f"""
-        <b>Coordenada X:</b> {lon}<br>
-        <b>Coordenada Y:</b> {lat}<br>
-        <b>{criterio}:</b> {categoria_actual}
+        <b>Dirección:</b> {fila.get('Dirección de la Orden de Trabajo de Workforce', 'No registrada')}<br>
+        <b>Unidad Vecinal:</b> {fila.get('Unidad Vecinal', 'N/A')}<br>
+        <b>Macrosector:</b> {fila.get('Macrosector', 'N/A')}<br>
+        <b>Microsector:</b> {fila.get('Microsector', 'N/A')}<br>
+        <b>Coordenadas:</b> {lat}, {lon}
         """
         
+        # Añadir marcadores circulares limpios para que no se amontonen
         folium.CircleMarker(
             location=[lat, lon],
             radius=6,
-            popup=folium.Popup(info_popup, max_width=250),
+            popup=folium.Popup(info_popup, max_width=300),
             color=color_punto,
             fill=True,
             fill_color=color_punto,
             fill_opacity=0.7
         ).add_to(mapa)
 
-    # Desplegar el mapa en Streamlit
-    st_folium(mapa, width="100%", height=600)
+    # 8. Renderizar el mapa en la aplicación de Streamlit
+    st_folium(mapa, width="100%", height=650)
 
-    # Mostrar la leyenda ordenadamente
-    st.markdown("### 📊 Leyenda de Sectores")
+    # 9. Mostrar la leyenda dinámica ordenadamente en 3 columnas abajo del mapa
+    st.markdown("### 📊 Leyenda de Sectores Detectados")
     cols = st.columns(3)
     for i, (cat, col) in enumerate(diccionario_colores.items()):
         with cols[i % 3]:
             st.markdown(f"🟢 **{cat}**")
 
 except FileNotFoundError:
-    st.error(f"No se pudo cargar el archivo '{ARCHIVO_DATOS}'. Verifica que esté en la raíz del repositorio.")
+    st.error(f"No se pudo encontrar el archivo '{ARCHIVO_DATOS}' en la raíz del proyecto.")
+except Exception as e:
+    st.error(f"Ocurrió un error inesperado al procesar el mapa: {e}")
