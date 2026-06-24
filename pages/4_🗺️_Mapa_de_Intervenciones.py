@@ -11,7 +11,7 @@ st.title("📍 Distribución Geográfica de Intervenciones (Camión Vactor)")
 ARCHIVO_PREDETERMINADO = "datos_vactor.csv"
 
 # =========================================================================
-# CONTROLADOR DE CARGA DE DATOS (Opcional en Barra Lateral)
+# 1. CONTROLADOR DE CARGA DE DATOS (Barra Lateral)
 # =========================================================================
 st.sidebar.header("📁 Gestión de Datos")
 archivo_cargado = st.sidebar.file_uploader(
@@ -20,9 +20,10 @@ archivo_cargado = st.sidebar.file_uploader(
     help="El archivo debe mantener las columnas 'Coordenada X', 'Coordenada Y' y los sectores."
 )
 
-df = None
+# Inicializar el DataFrame vacío
+df = pd.DataFrame()
 
-# Definir qué archivo leer
+# Cargar el archivo correspondiente
 if archivo_cargado is not None:
     try:
         df = pd.read_csv(archivo_cargado)
@@ -34,55 +35,49 @@ else:
         df = pd.read_csv(ARCHIVO_PREDETERMINADO)
     except FileNotFoundError:
         st.error(f"No se encontró el archivo base '{ARCHIVO_PREDETERMINADO}' en el repositorio. Por favor, sube un archivo en la barra lateral.")
-        st.stop()
 
 # =========================================================================
-# PROCESAMIENTO Y RENDERIZADO DEL MAPA
+# 2. CREACIÓN FIJA DEL MAPA BASE (ArcGIS)
 # =========================================================================
-if df is not None:
+mapa = folium.Map(
+    location=[-38.745, -72.615], 
+    zoom_start=12, 
+    tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
+    attr="Esri / ArcGIS Online"
+)
+
+# =========================================================================
+# 3. PROCESAMIENTO DE PUNTOS (Si hay datos disponibles)
+# =========================================================================
+diccionario_colores = {}
+
+if df is not None and not df.empty:
     try:
-        # 1. Limpieza crítica: Eliminar filas vacías en las coordenadas
+        # Limpieza crítica de coordenadas
         df = df.dropna(subset=['Coordenada X', 'Coordenada Y'])
-        
-        # 2. Conversión de comas a puntos para procesar decimales correctamente
         df['Coordenada X'] = df['Coordenada X'].astype(str).str.replace(',', '.').astype(float)
         df['Coordenada Y'] = df['Coordenada Y'].astype(str).str.replace(',', '.').astype(float)
         
-        if df.empty:
-            st.error("El set de datos seleccionado no contiene registros con coordenadas válidas.")
-            st.stop()
-
         # Selector interactivo de criterio
         criterio = st.selectbox(
             "Selecciona el criterio para clasificar los puntos en el mapa:",
             ["Unidad Vecinal", "Macrosector", "Microsector"]
         )
 
-        # Paleta de colores de Folium
+        # Configuración de la paleta de colores
         colores_disponibles = [
             "red", "blue", "green", "purple", "orange", "darkred", "cadetblue", 
             "darkpurple", "pink", "darkblue", "darkgreen"
         ]
 
         categorias_unicas = df[criterio].dropna().unique()
-        diccionario_colores = {}
         for i, cat in enumerate(categorias_unicas):
             diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
 
-        # Mapa base original de ArcGIS Online
-        mapa = folium.Map(
-            location=[-38.745, -72.615], 
-            zoom_start=12, 
-            tiles="https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
-            attr="Esri / ArcGIS Online"
-        )
-
-        # Muestra el total de registros detectados en la interfaz
         st.caption(f"Visualizando un extracto optimizado de las {len(df)} intervenciones detectadas.")
 
-        # Limitamos el renderizado a los primeros 2500 puntos para cuidar el rendimiento de la app si subes un archivo gigante
+        # Dibujar los puntos sobre el objeto 'mapa'
         df_render = df.head(2500)
-
         for index, fila in df_render.iterrows():
             try:
                 lat = float(fila['Coordenada Y'])
@@ -110,27 +105,30 @@ if df is not None:
                 ).add_to(mapa)
             except:
                 continue
-
-        # Desplegar mapa de ArcGIS
-        st_folium(mapa, width="100%", height=650)
-
-        # =========================================================================
-        # LEYENDA DINÁMICA (Soporta Modo Claro y Oscuro de forma nativa)
-        # =========================================================================
-        st.markdown("### 📊 Leyenda de Sectores Detectados")
-        cols = st.columns(3)
-        
-        mapa_colores_st = {
-            "red": "red", "blue": "blue", "green": "green", 
-            "purple": "violet", "orange": "orange", "darkred": "red", 
-            "cadetblue": "blue", "darkpurple": "violet", "pink": "rainbow", 
-            "darkblue": "blue", "darkgreen": "green", "gray": "gray"
-        }
-        
-        for i, (cat, col) in enumerate(diccionario_colores.items()):
-            color_markdown = mapa_colores_st.get(col, "gray")
-            with cols[i % 3]:
-                st.markdown(f"**:{color_markdown}[●] {cat}**")
-
     except Exception as e:
-        st.error(f"Ocurrió un error al procesar el archivo: {e}")
+        st.error(f"Error al procesar los puntos del mapa: {e}")
+
+# =========================================================================
+# 4. RENDERIZADO FINAL DEL MAPA EN LA PÁGINA
+# =========================================================================
+# Al dejar esta función afuera de cualquier "if", el mapa se dibuja sí o sí
+st_folium(mapa, width="100%", height=650)
+
+# =========================================================================
+# 5. LEYENDA DINÁMICA
+# =========================================================================
+if diccionario_colores:
+    st.markdown("### 📊 Leyenda de Sectores Detectados")
+    cols = st.columns(3)
+    
+    mapa_colores_st = {
+        "red": "red", "blue": "blue", "green": "green", 
+        "purple": "violet", "orange": "orange", "darkred": "red", 
+        "cadetblue": "blue", "darkpurple": "violet", "pink": "rainbow", 
+        "darkblue": "blue", "darkgreen": "green", "gray": "gray"
+    }
+    
+    for i, (cat, col) in enumerate(diccionario_colores.items()):
+        color_markdown = mapa_colores_st.get(col, "gray")
+        with cols[i % 3]:
+            st.markdown(f"**:{color_markdown}[●] {cat}**")
