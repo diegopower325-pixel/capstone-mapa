@@ -2,11 +2,13 @@ import streamlit as st
 import pandas as pd
 import folium
 from streamlit_folium import st_folium
+# Importamos los componentes para el Norte y la Escala
+from folium.plugins import FloatImage, ScaleControl
 
 # Configuración de la página en modo ancho
 st.set_page_config(page_title="Mapa de Intervenciones", layout="wide")
 st.title("📍 Distribución Geográfica de Intervenciones (Camión Vactor)")
-st.write("Visualización interactiva con mapas base de ArcGIS Online para la comuna de Temuco.")
+st.write("Visualización técnica con coordenadas de referencia, escala y norte magnético.")
 
 # Nombre exacto de tu archivo en la raíz del repositorio
 ARCHIVO_DATOS = "datos_vactor.csv"
@@ -15,10 +17,10 @@ try:
     # 1. Cargar datos desde el CSV
     df = pd.read_csv(ARCHIVO_DATOS)
     
-    # 2. Limpieza crítica: Eliminar filas donde las coordenadas vengan vacías por completo
+    # 2. Limpieza crítica: Eliminar filas vacías
     df = df.dropna(subset=['Coordenada X', 'Coordenada Y'])
     
-    # 3. Conversión de comas a puntos para procesar las coordenadas correctamente
+    # 3. Conversión de comas a puntos para procesar decimales
     df['Coordenada X'] = df['Coordenada X'].astype(str).str.replace(',', '.').astype(float)
     df['Coordenada Y'] = df['Coordenada Y'].astype(str).str.replace(',', '.').astype(float)
     
@@ -26,25 +28,26 @@ try:
         st.error("El archivo CSV no contiene registros con coordenadas válidas.")
         st.stop()
 
-    # Selector interactivo con los nombres de clasificación del CSV
+    # Selector interactivo
     criterio = st.selectbox(
         "Selecciona el criterio para clasificar los puntos en el mapa:",
         ["Unidad Vecinal", "Macrosector", "Microsector"]
     )
 
-    # Paleta de colores para pintar los puntos de forma dinámica
+    # Paleta de colores dinámicos
     colores_disponibles = [
         "red", "blue", "green", "purple", "orange", "darkred", "cadetblue", 
         "darkpurple", "pink", "darkblue", "darkgreen"
     ]
 
-    # Obtener las categorías únicas de la columna seleccionada
     categorias_unicas = df[criterio].dropna().unique()
     diccionario_colores = {}
     for i, cat in enumerate(categorias_unicas):
         diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
 
-    # Crear el mapa base centrado en Temuco consumiendo el Servidor de ArcGIS
+    # =========================================================================
+    # CONFIGURACIÓN DEL MAPA TÉCNICO (ArcGIS Base)
+    # =========================================================================
     mapa = folium.Map(
         location=[-38.745, -72.615], 
         zoom_start=12, 
@@ -52,7 +55,31 @@ try:
         attr="Esri / ArcGIS Online"
     )
 
-    # Dibujar marcadores circulares limpios limitando a las primeras 1200 filas para agilizar
+    # A. AÑADIR ESCALA GRÁFICA (Abajo a la izquierda, sistema métrico)
+    ScaleControl(position='bottomleft', imperial=False, metric=True).add_to(mapa)
+
+    # B. AÑADIR LA ROSA DE LOS VIENTOS / NORTE (Arriba a la derecha)
+    # Usamos una imagen PNG limpia de una flecha de norte estándar de cartografía
+    url_norte = "https://upload.wikimedia.org/wikipedia/commons/4/4f/Simple_compass_rose.png"
+    FloatImage(url_norte, bottom=83, left=92, width="50px").add_to(mapa)
+
+    # C. AÑADIR COORDENADAS DE REFERENCIA EN TIEMPO REAL
+    # Este script de JavaScript muestra la latitud y longitud exacta donde el usuario pasa el mouse
+    formatter = "function(num) {return L.Util.formatNum(num, 5) + ' º';};"
+    folium.plugins.MousePosition(
+        position='topright',
+        separator=' | Y: ',
+        empty_string='Fuera de rango',
+        lng_first=True,  # Para que muestre primero X (Longitud) y luego Y (Latitud) estilo UTM
+        num_digits=5,
+        prefix='X: ',
+        lat_formatter=formatter,
+        lng_formatter=formatter
+    ).add_to(mapa)
+
+    # =========================================================================
+    # RENDERIZADO DE PUNTOS
+    # =========================================================================
     df_render = df.head(1200)
 
     for index, fila in df_render.iterrows():
@@ -83,19 +110,16 @@ try:
         except:
             continue
 
-# Renderizar el mapa en la app de Streamlit
+    # Renderizar el mapa en la app de Streamlit
     st_folium(mapa, width="100%", height=650)
 
     # =========================================================================
-    # CORRECCIÓN DE SIMBOLOGÍA: Renderizado dinámico con colores reales del mapa
+    # LEYENDA DINÁMICA CON COLORES REALES
     # =========================================================================
     st.markdown("### 📊 Leyenda de Sectores Detectados")
-    
-    # Crear la grilla de 3 columnas para distribuir los elementos de forma ordenada
     cols = st.columns(3)
     
     for i, (cat, col) in enumerate(diccionario_colores.items()):
-        # Mapear los nombres de Folium a códigos de color HEX estables para la web
         mapa_colores_hex = {
             "red": "#E74C3C", "blue": "#3498DB", "green": "#2ECC71", 
             "purple": "#9B59B6", "orange": "#E67E22", "darkred": "#943126", 
@@ -104,7 +128,6 @@ try:
         }
         color_hex = mapa_colores_hex.get(col, "#7F8C8D")
         
-        # Insertar el elemento en la columna correspondiente usando HTML en línea
         with cols[i % 3]:
             st.markdown(
                 f"""
@@ -125,6 +148,6 @@ try:
             )
 
 except FileNotFoundError:
-    st.error(f"No se pudo encontrar el archivo '{ARCHIVO_DATOS}' en la raíz del proyecto.")
+    st.error(f"No se pudo encontrar el archivo '{ARCHIVO_DATOS}' en tu repositorio.")
 except Exception as e:
     st.error(f"Ocurrió un error al procesar el mapa: {e}")
