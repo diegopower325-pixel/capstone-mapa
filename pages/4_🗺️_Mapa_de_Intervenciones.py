@@ -1,9 +1,8 @@
 import streamlit as st
 import pandas as pd
 import folium
-from streamlit_folium import st_folium
-# Importamos los componentes para el Norte y la Escala
-from folium.plugins import FloatImage, ScaleControl
+from streamlit_folium import folium_static  # Cambiamos a la función estática para asegurar plugins
+from folium.plugins import FloatImage, ScaleControl, MousePosition
 
 # Configuración de la página en modo ancho
 st.set_page_config(page_title="Mapa de Intervenciones", layout="wide")
@@ -46,7 +45,7 @@ try:
         diccionario_colores[cat] = colores_disponibles[i % len(colores_disponibles)]
 
     # =========================================================================
-    # CONFIGURACIÓN DEL MAPA TÉCNICO (ArcGIS Base)
+    # CONFIGURACIÓN DEL MAPA CON MÉTODOS CARTOGRÁFICOS ALTERNATIVOS
     # =========================================================================
     mapa = folium.Map(
         location=[-38.745, -72.615], 
@@ -55,26 +54,21 @@ try:
         attr="Esri / ArcGIS Online"
     )
 
-    # A. AÑADIR ESCALA GRÁFICA (Abajo a la izquierda, sistema métrico)
+    # A. AÑADIR ESCALA GRÁFICA (Forzada en la esquina inferior izquierda)
     ScaleControl(position='bottomleft', imperial=False, metric=True).add_to(mapa)
 
-    # B. AÑADIR LA ROSA DE LOS VIENTOS / NORTE (Arriba a la derecha)
-    # Usamos una imagen PNG limpia de una flecha de norte estándar de cartografía
-    url_norte = "https://upload.wikimedia.org/wikipedia/commons/4/4f/Simple_compass_rose.png"
-    FloatImage(url_norte, bottom=83, left=92, width="50px").add_to(mapa)
+    # B. AÑADIR NORTE CARTOGRÁFICO
+    # Usamos una URL alternativa muy estable de una flecha de norte limpia
+    url_norte = "https://i.imgur.com/83pL6gC.png"  # Flecha de norte estándar de alta visibilidad
+    FloatImage(url_norte, bottom=85, left=90, width="40px").add_to(mapa)
 
-    # C. AÑADIR COORDENADAS DE REFERENCIA EN TIEMPO REAL
-    # Este script de JavaScript muestra la latitud y longitud exacta donde el usuario pasa el mouse
-    formatter = "function(num) {return L.Util.formatNum(num, 5) + ' º';};"
-    folium.plugins.MousePosition(
+    # C. RECUADRO DE COORDENADAS DINÁMICAS (Esquina superior derecha)
+    MousePosition(
         position='topright',
         separator=' | Y: ',
-        empty_string='Fuera de rango',
-        lng_first=True,  # Para que muestre primero X (Longitud) y luego Y (Latitud) estilo UTM
-        num_digits=5,
-        prefix='X: ',
-        lat_formatter=formatter,
-        lng_formatter=formatter
+        empty_string='Fuera del mapa',
+        lng_first=True,  # X (Longitud) primero, luego Y (Latitud)
+        prefix='X: '
     ).add_to(mapa)
 
     # =========================================================================
@@ -110,8 +104,8 @@ try:
         except:
             continue
 
-    # Renderizar el mapa en la app de Streamlit
-    st_folium(mapa, width="100%", height=650)
+    # NUEVO MÉTODO: Forzar el renderizado completo del mapa con folium_static
+    folium_static(mapa, width=1100, height=600)
 
     # =========================================================================
     # LEYENDA DINÁMICA CON COLORES REALES
