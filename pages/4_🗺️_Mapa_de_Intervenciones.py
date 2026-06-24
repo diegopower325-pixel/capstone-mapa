@@ -83,15 +83,46 @@ try:
         except:
             continue
 
-    # Renderizar el mapa en la app de Streamlit
+# Renderizar el mapa en la app de Streamlit
     st_folium(mapa, width="100%", height=650)
 
-    # Mostrar la leyenda dinámica ordenadamente abajo
+    # =========================================================================
+    # CORRECCIÓN DE SIMBOLOGÍA: Renderizado dinámico con colores reales del mapa
+    # =========================================================================
     st.markdown("### 📊 Leyenda de Sectores Detectados")
+    
+    # Crear la grilla de 3 columnas para distribuir los elementos de forma ordenada
     cols = st.columns(3)
+    
     for i, (cat, col) in enumerate(diccionario_colores.items()):
+        # Mapear los nombres de Folium a códigos de color HEX estables para la web
+        mapa_colores_hex = {
+            "red": "#E74C3C", "blue": "#3498DB", "green": "#2ECC71", 
+            "purple": "#9B59B6", "orange": "#E67E22", "darkred": "#943126", 
+            "cadetblue": "#5D6D7E", "darkpurple": "#4A235A", "pink": "#F48FB1", 
+            "darkblue": "#1B4F72", "darkgreen": "#1E8449", "gray": "#7F8C8D"
+        }
+        color_hex = mapa_colores_hex.get(col, "#7F8C8D")
+        
+        # Insertar el elemento en la columna correspondiente usando HTML en línea
         with cols[i % 3]:
-            st.markdown(f"🟢 **{cat}**")
+            st.markdown(
+                f"""
+                <div style="display: flex; align-items: center; margin-bottom: 8px; font-family: sans-serif;">
+                    <span style="
+                        display: inline-block; 
+                        width: 14px; 
+                        height: 14px; 
+                        background-color: {color_hex}; 
+                        border-radius: 50%; 
+                        margin-right: 10px;
+                        border: 1px solid #555;
+                    "></span>
+                    <span style="font-weight: bold; color: #333; font-size: 14px;">{cat}</span>
+                </div>
+                """, 
+                unsafe_allow_html=True
+            )
 
 except FileNotFoundError:
     st.error(f"No se pudo encontrar el archivo '{ARCHIVO_DATOS}' en la raíz del proyecto.")
